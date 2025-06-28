@@ -1,12 +1,12 @@
-const asyncHandler = (requestHandler) => {
-  (req ,res , next) => {
+const asyncHandler = (requestHandler) => {    // asyncHandler( param ){ resolve Param }
+  return (req ,res , next) => {
     Promise.resolve(requestHandler(req,res,next)).
     catch((err) => next(err))
   }
  
 };
 
-export default asyncHandler
+export { asyncHandler}
 
 
 // // wrapper func to handle any database connection and async functions (try catch method)
