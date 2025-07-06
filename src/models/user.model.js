@@ -48,7 +48,7 @@ const userSchema = new Schema(
 //using pre hook to encrypt password just before saving to database (with check that password is modified)
 userSchema.pre("save", async function (next) {
   // next as param becasue its a middleware and middlewares are executed in a sequence next manner
-  if (this.isModified("password")) return next();
+  if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
