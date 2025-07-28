@@ -1,0 +1,29 @@
+import { User } from "../models/user.model";
+import { APIerror } from "../utils/Api_ErrorHandler";
+import { asyncHandler } from "../utils/async_handler";
+import jwt from "jsonwebtoken";
+
+export const verifyJWT = asyncHandler(async (req, res, next) => {
+  try {
+    const accessToken =
+      req.cookies?.accesstoken ||
+      req.header("Authorization")?.replace("Bearer ", "");
+    // we get this header  {Authorization : Bearer <Token>}   so removeing the beater part to get token only
+  
+    if (!accessToken) {
+      throw new APIerror(401, "Unauthorized ", ["token required"]);
+    }
+  
+    const decoded = jwt.verify(accessToken, ACCESS_TOKEN_SECRET);
+    const user = await User.findById(decoded?._id).select("-password -refreshToken");
+  
+    if (!user) {
+      throw new APIerror(401, "Invalid Access Token");
+    }
+  
+    req.user = user; // making my request have the user before going to the controller
+    next();   
+  } catch (error) {
+    throw new APIerror(401,error?.message || "Invalid Access Token")
+  }
+});

@@ -3,6 +3,25 @@ import { APIerror } from "../utils/Api_ErrorHandler.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/file_upload.js";
 import { ApiResponse } from "../utils/Api_response.js";
+import { access } from "fs";
+import { json } from "express";
+
+const generateTokens = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAcessToken();
+    const refereshToken = user.generateRefereshToken();
+    user.refreshToken = refereshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return { refereshToken, accessToken };
+  } catch (error) {
+    throw new APIerror(
+      500,
+      `some error occured while creating tokens ${error}`
+    );
+  }
+};
 
 const registerUser = asyncHandler(async (req, res) => {
   // GET USER DETAILS
@@ -17,9 +36,9 @@ const registerUser = asyncHandler(async (req, res) => {
   const { username, email, fullName, password } = req.body;
 
   //validation
-  if (!username || !email || !fullName || !password) {
-    throw new APIerror(400, "All fields are required");
-  }
+  // if (!username || !email || !fullName || !password) {
+  //   throw new APIerror(400, "All fields are required");
+  // }
 
   if ([username, email, fullName, password].some((field) => field == "")) {
     throw new APIerror(400, "All fields are required");
@@ -42,10 +61,10 @@ ${req.files?.avatar?.[0]?.path}`);
 
   const avatarLocalPath = req.files?.avatar?.[0]?.path;
   const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
-  
+
   // let coverImageLocalPath ;
   // if (
-    // doing like this as it can be null and would giving an error for undefined as we were trying to access 0th element of an undefined array
+  // doing like this as it can be null and would giving an error for undefined as we were trying to access 0th element of an undefined array
   //   req.files &&
   //   Array.isArray(req.files.coverImage) &&
   //   req.files.coverImage.length > 0
@@ -60,8 +79,7 @@ ${req.files?.avatar?.[0]?.path}`);
   // uploading on cloudinary
 
   const avatar = await uploadOnCloudinary(avatarLocalPath);
-  const coverImage =  await uploadOnCloudinary(coverImageLocalPath)
-
+  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
   // checking on cloudinary
 
@@ -95,4 +113,76 @@ ${req.files?.avatar?.[0]?.path}`);
     .json(new ApiResponse(201, isUserCreated, "User created Successfully"));
 });
 
-export { registerUser };
+const userLogin = asyncHandler(async (req, res) => {
+  const { username, email, password } = req.body;
+
+  if (!username || !email) {
+    throw new APIerror(400, "username or email is required");
+  }
+  const user = User.findOne($or[(username, email)]);
+
+  if (!user) {
+    throw new APIerror(404, "username or email Not Found");
+  }
+
+  const ispasswordValid = user.isPasswordCorrect(password);
+  if (!ispasswordValid) {
+    throw new APIerror(404, "Incorrect password ");
+  }
+
+  const { refereshToken: refreshToken, accesstoken } = await generateTokens(
+    user._id
+  );
+
+  const loggedInUser = User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  res
+    .status(200)
+    .cookies("accessToken", accesstoken, options)
+    .cookies("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accesstoken: accesstoken,
+          refreshToken: refreshToken,
+        },
+        "User logged in successfully"
+      )
+    );
+});
+
+const logoutUser = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        refreshToken: undefined,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options),
+    json(new ApiResponse(200, {}, "User Logged Out Successfully"));
+});
+
+export { registerUser, userLogin, logoutUser };

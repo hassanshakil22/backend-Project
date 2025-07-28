@@ -58,7 +58,7 @@ userSchema.methods.isPasswordCorrect = async function (password) {
 };
 //making a custom method to mongoose to generate acess token
 
-userSchema.methods.generateAcessToken = async function (password) {
+userSchema.methods.generateAcessToken = async function () {
   return jwt.sign(
     //payload
     {
@@ -77,7 +77,7 @@ userSchema.methods.generateAcessToken = async function (password) {
 };
 //making a custom method to mongoose to generate Referesh token
 
-userSchema.methods.generateRefereshToken = async function (password) {
+userSchema.methods.generateRefereshToken = async function () {
   return jwt.sign(
     //payload
     {
