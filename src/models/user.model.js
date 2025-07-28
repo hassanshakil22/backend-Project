@@ -59,7 +59,7 @@ userSchema.methods.isPasswordCorrect = async function (password) {
 //making a custom method to mongoose to generate acess token
 
 userSchema.methods.generateAcessToken = async function () {
-  return jwt.sign(
+  return await jwt.sign(
     //payload
     {
       _id: this._id,
@@ -77,17 +77,17 @@ userSchema.methods.generateAcessToken = async function () {
 };
 //making a custom method to mongoose to generate Referesh token
 
-userSchema.methods.generateRefereshToken = async function () {
-  return jwt.sign(
+userSchema.methods.generateRefreshToken = async function () {
+  return await jwt.sign(
     //payload
     {
       _id: this._id,
     },
     // secret key
-    process.env.REFERESH_TOEKN_SECRET,
+    process.env.REFRESH_TOKEN_SECRET,
     // object of expiry
     {
-      expiresIn: process.env.REFERESH_TOEKN_EXPIRY,
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
     }
   );
 };

@@ -9,12 +9,14 @@ import { json } from "express";
 const generateTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
-    const accessToken = user.generateAcessToken();
-    const refereshToken = user.generateRefereshToken();
-    user.refreshToken = refereshToken;
+    const accessToken = await user.generateAcessToken();
+    const refreshToken = await user.generateRefreshToken();
+    console.log(`refresh token before saving !!  ${JSON.stringify(refreshToken)}`);
+    
+    user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
 
-    return { refereshToken, accessToken };
+    return { refereshToken: refreshToken, accessToken };
   } catch (error) {
     throw new APIerror(
       500,
@@ -56,8 +58,8 @@ const registerUser = asyncHandler(async (req, res) => {
   //check images
   console.log(`   req.files?.avatar[0]?.path
 ${req.files?.avatar?.[0]?.path}`);
-  //   console.log(`   req.files
-  // ${req.files}`);
+  console.log(`   req.files
+  ${JSON.stringify(req.files)}`);
 
   const avatarLocalPath = req.files?.avatar?.[0]?.path;
   const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
@@ -114,13 +116,20 @@ ${req.files?.avatar?.[0]?.path}`);
 });
 
 const userLogin = asyncHandler(async (req, res) => {
-  const { username, email, password } = req.body;
+  console.log(req.body);
 
-  if (!username || !email) {
+  const password = req.body.password;
+
+  // Use either email or username, whichever is provided
+  const identifier = req.body.email || req.body.username;
+
+  if (!identifier) {
     throw new APIerror(400, "username or email is required");
   }
-  const user = User.findOne($or[(username, email)]);
 
+  const user = await User.findOne({
+    $or: [{ email: identifier }, { username: identifier }],
+  });
   if (!user) {
     throw new APIerror(404, "username or email Not Found");
   }
@@ -134,7 +143,7 @@ const userLogin = asyncHandler(async (req, res) => {
     user._id
   );
 
-  const loggedInUser = User.findById(user._id).select(
+  const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
 
@@ -145,8 +154,8 @@ const userLogin = asyncHandler(async (req, res) => {
 
   res
     .status(200)
-    .cookies("accessToken", accesstoken, options)
-    .cookies("refreshToken", refreshToken, options)
+    .cookie("accessToken", accesstoken, options)
+    .cookie("refreshToken", refreshToken, options)
     .json(
       new ApiResponse(
         200,
