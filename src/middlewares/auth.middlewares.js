@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 export const verifyJWT = asyncHandler(async (req, res, next) => {
   try {
     const accessToken =
-      req.cookies?.accesstoken ||
+      req.cookies?. accessToken ||
       req.header("Authorization")?.replace("Bearer ", "");
     // we get this header  {Authorization : Bearer <Token>}   so removeing the beater part to get token only
   
@@ -14,7 +14,7 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
       throw new APIerror(401, "Unauthorized ", ["token required"]);
     }
   
-    const decoded = jwt.verify(accessToken, ACCESS_TOKEN_SECRET);
+    const decoded = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET);
     const user = await User.findById(decoded?._id).select("-password -refreshToken");
   
     if (!user) {
