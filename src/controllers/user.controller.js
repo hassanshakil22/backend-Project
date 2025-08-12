@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from "../utils/file_upload.js";
 import { ApiResponse } from "../utils/Api_response.js";
 import jwt from "jsonwebtoken";
 import e from "cors";
+import mongoose from "mongoose";
 const generateTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -141,7 +142,7 @@ const userLogin = asyncHandler(async (req, res) => {
     throw new APIerror(404, "username or email Not Found");
   }
 
-  const ispasswordValid = user.isPasswordCorrect(password);
+  const ispasswordValid = await user.isPasswordCorrect(password);
   if (!ispasswordValid) {
     throw new APIerror(404, "Incorrect password ");
   }
@@ -248,9 +249,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 const changePassword = asyncHandler(async (req, res) => {
+  console.log(req.body);
+
   const { oldPassword, newPassword } = req.body;
 
-  const user = await User.findById(req.body._id);
+  const user = await User.findById(req.user._id);
 
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
   if (!isPasswordCorrect) {
@@ -293,22 +296,23 @@ const updateUser = asyncHandler(async (req, res) => {
 });
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
-  const localavatarPath = req.file?.avatar?.[0]?.path;
+  const avatar = req.file.path;
+  console.log(req.file);
 
-  if (!localavatarPath) {
+  if (!avatar) {
     throw new APIerror(400, "Avatar Required");
   }
 
-  const avatar = await uploadOnCloudinary(localavatarPath);
+  const newavatar = await uploadOnCloudinary(avatar);
 
-  if (!avatar) {
+  if (!newavatar) {
     throw new APIerror(400, "Error while uploading avatar on Cloud");
   }
 
-  const user = User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user._id,
     {
-      avatar: avatar.url,
+      avatar: newavatar.url,
     },
     {
       new: true,
@@ -320,22 +324,22 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 });
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
-  const localCoverImagePath = req.file?.coverImage?.[0]?.path;
+  const coverImage = req.file.path;
 
-  if (!localCoverImagePath) {
+  if (!coverImage) {
     throw new APIerror(400, "Avatar Required");
   }
 
-  const coverImage = await uploadOnCloudinary(localCoverImagePath);
+  const newCoverImage = await uploadOnCloudinary(coverImage);
 
-  if (!coverImage) {
+  if (!newCoverImage) {
     throw new APIerror(400, "Error while uploading coverImage on Cloud");
   }
 
-  const user = User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user._id,
     {
-      coverImage: coverImage.url,
+      coverImage: newCoverImage.url,
     },
     {
       new: true,
@@ -344,6 +348,121 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, user, "coverImage updated successfully"));
+});
+
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+
+  if (!username) {
+    throw new APIerror(400, "Username required from params");
+  }
+
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username: username,
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions", // model name defined was Subscription so it will be changed to subscriptions by mongoose
+        localField: "_id",
+        foreignField: "channel", // seeing all the documents where this id exists as the channel subscribed to
+        as: "subscribers",
+      }, // getting the subscriber documents of that user
+    },
+    {
+      $lookup: {
+        from: "subscriptions", // model name defined was Subscription so it will be changed to subscriptions by mongoose
+        localField: "_id",
+        foreignField: "subscriber", // seeing all the documents where this id exists as the subscriber
+        as: "channelsSubscribedToCount", // getting the subscribed to documents of that user
+      },
+    },
+    {
+      $addFields: {
+        subscriberCount: { $size: "$subscribers" },
+        channelsSubscribedToCount: { $size: "$channelsSubscribedToCount" },
+        isSubscribed: {
+          $cond: {
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        username: 1,
+        fullName: 1,
+        avatar: 1,
+        coverImage: 1,
+        createdAt: 1,
+        subscriberCount: 1,
+        channelsSubscribedToCount: 1,
+        isSubscribed: 1,
+      },
+    },
+  ]);
+  console.log(channel);
+  res.status(200).json(new ApiResponse(200, channel[0], "Request Successful"));
+});
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+  const userWithWatchHistory = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user._id), // right now in pipeline i cannot direct give ._id as the id coming from the user will be a litteral
+        // string where as
+        //  in mongoDb it is a mongoDb object type  id and usually
+        // i dont have to do this as methods like findbyId do it bts
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistoryvideos",
+        pipeline: [
+          // sub pipeline as before getting the match history videos i also want little details abt the owner that is a User
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              pipeline: [
+                // this sub pipeline tells in owner field how much data from user table i want
+                {
+                  $project: {
+                    fullName: 1,
+                    username: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          }, // this gives an array with key owner and value array with first value having the data we have gotten
+          {
+            // addition work to extract that array from owner and override the owner field to just give the owner object
+            $addFields: {
+              owner: {
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+  console.log(userWithWatchHistory);
+  console.log(userWithWatchHistory[0]);
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, userWithWatchHistory[0].watchHistory));
 });
 
 export {
@@ -356,4 +475,6 @@ export {
   updateUser,
   updateUserAvatar,
   updateUserCoverImage,
+  getUserChannelProfile,
+  getWatchHistory,
 };

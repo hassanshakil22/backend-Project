@@ -2,9 +2,12 @@ import { Router } from "express";
 import {
   changePassword,
   getCurrentUser,
+  getUserChannelProfile,
+  getWatchHistory,
   logoutUser,
   refreshAccessToken,
   registerUser,
+  updateUser,
   updateUserAvatar,
   updateUserCoverImage,
   userLogin,
@@ -30,9 +33,12 @@ userRouter.route("/getCurrentUser").get(verifyJWT, getCurrentUser);
 userRouter.route("/updateUserDetails").patch(verifyJWT, updateUser);
 userRouter
   .route("/updateAvatar")
-  .patch(verifyJWT, upload.fields({ name: "avatar", maxCount: 1 }), updateUserAvatar);
+  .patch(verifyJWT, upload.single('avatar'), updateUserAvatar);
 userRouter
   .route("/updateCoverImage")
-  .patch(verifyJWT, upload.fields({ name: "coverImage", maxCount: 1 }), updateUserCoverImage);
+  .patch(verifyJWT, upload.single("coverImage"), updateUserCoverImage);
+userRouter.route("/channel/:username").get(verifyJWT,getUserChannelProfile )
 
-export default router;
+userRouter.route("/watchHistory").get(verifyJWT,getWatchHistory)
+
+export default userRouter;

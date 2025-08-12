@@ -20,8 +20,10 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
     if (!user) {
       throw new APIerror(401, "Invalid Access Token");
     }
-  
+    
     req.user = user; // making my request have the user before going to the controller
+    console.log("Access token verified");
+    
     next();   
   } catch (error) {
     throw new APIerror(401,error?.message || "Invalid Access Token")
